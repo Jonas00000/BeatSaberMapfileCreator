@@ -1,0 +1,23 @@
+{
+  "_version" : "2.1.0",
+  "_songName" : "",
+  "_songSubName" : "",
+  "_songAuthorName" : "",
+  "_levelAuthorName" : "",
+  "_beatsPerMinute" : 100,
+  "_previewStartTime" : 12,
+  "_previewDuration" : 10,
+  "_songTimeOffset" : 0,
+  "_shuffle" : 0,
+  "_shufflePeriod" : 0.5,
+  "_coverImageFilename" : "",
+  "_songFilename" : "song.ogg",
+  "_environmentName" : "DefaultEnvironment",
+  "_allDirectionsEnvironmentName" : "GlassDesertEnvironment",
+  "_environmentNames" : [
+  ],
+  "_colorSchemes" : [
+  ],
+  "_difficultyBeatmapSets" : [
+  ]
+}

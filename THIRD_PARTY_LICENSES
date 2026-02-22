@@ -1,0 +1,34 @@
+# Third-Party Licenses
+
+This project itself is licensed under GPL-2.0-or-later (see LICENSE).
+
+The release builds bundle the following third-party binaries.
+They are **not** included in the source repository — users building from source
+must obtain them separately (see README).
+
+---
+
+## BpmCli.exe
+
+- **Description:** BPM and offset detection CLI tool (modified fork)
+- **Original project:** ArrowVortex BPM analysis CLI
+- **Fork (with modifications):** https://github.com/Jonas00000/ArrowVortex-BPMCli
+- **License:** GNU General Public License v2.0 or later (GPL-2.0-or-later)
+- **Source availability:** Full source code of the modified version is available
+  at the fork URL above.
+
+## ffmpeg.exe
+
+- **Description:** Audio/video conversion and processing
+- **Project:** https://ffmpeg.org/
+- **License:** GNU General Public License v2.0 or later (GPL-2.0-or-later)
+  and/or GNU Lesser General Public License v2.1 or later (LGPL-2.1-or-later),
+  depending on the build configuration. Most full builds are GPL.
+- **Source availability:** https://ffmpeg.org/download.html
+
+## yt-dlp.exe
+
+- **Description:** YouTube audio/video downloader
+- **Project:** https://github.com/yt-dlp/yt-dlp
+- **License:** The Unlicense (public domain)
+- **Source availability:** https://github.com/yt-dlp/yt-dlp

@@ -1,0 +1,21 @@
+[project]
+name = "beatsabermapfilecreator"
+version = "1.0.0"
+description = "Creates a BeatSaber Mapfile from a song link or local file"
+requires-python = ">=3.14"
+license = "GPL-2.0-or-later"
+dependencies = [
+    "customtkinter>=5.2.2",
+    "mutagen>=1.47.0",
+    "numpy>=2.4.2",
+    "pillow>=12.1.1",
+    "python-dotenv>=1.2.1",
+    "requests>=2.32.5",
+    "soundfile>=0.13.1",
+    "ytmusicapi>=1.11.5",
+]
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.19.0",
+]
