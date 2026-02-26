@@ -4,6 +4,8 @@ import sys
 import os
 import math
 import re
+import tempfile
+import shutil
 import numpy as np
 import soundfile as sf
 from pathlib import Path
@@ -34,7 +36,7 @@ def _load_song(config):
             '-i', config['link'],
             '-vn',
             '-c:a', "libvorbis",
-            '-q:a', '10',
+            '-q:a', '8',
             f'{config['dir_name']}/tmp_song.ogg'
         ]
         try:
@@ -51,7 +53,14 @@ def _load_song(config):
         update_command = [os.path.join(BIN_DIR, "yt-dlp.exe"), '--update']
         subprocess.run(update_command, check=False, creationflags=_NO_WINDOW)
 
-        command = [os.path.join(BIN_DIR, "yt-dlp.exe"), '--extract-audio', '--audio-format', 'vorbis', '-o', f'{config['dir_name']}/tmp_song', config['link']]
+        command = [
+            os.path.join(BIN_DIR, "yt-dlp.exe"), 
+            '--extract-audio', 
+            '--audio-format', 'vorbis',
+            '--audio-quality', '4', 
+            '-o', f'{config['dir_name']}/tmp_song', 
+            config['link']
+        ]
         try:
             print(command)
             subprocess.run(command, check=True, creationflags=_NO_WINDOW)
@@ -63,8 +72,8 @@ def _load_song(config):
 
 
 def _get_BPM_and_offset(config):
-    def get_song_start_end_and_set_duration():
-        song_data, sr = sf.read(Path(config['dir_name']) / 'tmp_song.ogg')
+    def get_song_start_end_and_set_duration(song_path):
+        song_data, sr = sf.read(song_path)
         config['song_duration'] = len(song_data) / sr
         abs_vals = np.absolute(song_data.ravel())
 
@@ -87,27 +96,36 @@ def _get_BPM_and_offset(config):
         print('No song file')
         return False
     try:
-        res = subprocess.run([os.path.join(BIN_DIR, "BPMCli.exe"), path], check=True, capture_output=True, text=True, creationflags=_NO_WINDOW)
-        print(f'result: {res.stdout}')
+        # For non ASCII
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            temp_song_path = os.path.join(tmp_dir, "temp_song.ogg")
+            shutil.copy2(path, temp_song_path)
+            
+            res = subprocess.run(
+                [os.path.join(BIN_DIR, "BPMCli.exe"), temp_song_path],
+                check=True, capture_output=True, text=True, creationflags=_NO_WINDOW
+            )
+            
+            print(f'result: {res.stdout}')
 
-        try:
-            data = json.loads(res.stdout.strip())
-            if "error" in data:
-                print(f"BPM detection failed: {data['error']}")
+            try:
+                data = json.loads(res.stdout.strip())
+                if "error" in data:
+                    print(f"BPM detection failed: {data['error']}")
+                    return False
+            
+                bpm = float(data["bpm"])
+                offset = float(data["offset"])
+            except json.JSONDecodeError:
+                print('BPM detection failed, output was not valid JSON')
                 return False
-        
-            bpm = float(data["bpm"])
-            offset = float(data["offset"])
-        except json.JSONDecodeError:
-            print('BPM detection failed, output was not valid JSON')
-            return False
-        
-        bpm = round(bpm, 1)
-        bpm = int(bpm) if abs(int(bpm) - bpm) <= 0.1 else bpm
+            
+            bpm = round(bpm, 1)
+            bpm = int(bpm) if abs(int(bpm) - bpm) <= 0.1 else bpm
 
-        offset = -offset
-        song_start, song_end = get_song_start_end_and_set_duration()
-        config['song_end'] = song_end
+            offset = -offset
+            song_start, song_end = get_song_start_end_and_set_duration(temp_song_path)
+            config['song_end'] = song_end
         
         beat_length = 60 / bpm
         if song_start and 0 <= song_start < 10:
@@ -147,21 +165,32 @@ def _sync_song(config):
         af_filters.append(f'apad=pad_dur={tail_pad_ms}ms')
         print(f'Adding {tail_pad_ms}ms trailing silence.')
 
-    command = [
-        os.path.join(BIN_DIR, "ffmpeg.exe"),
-        '-i', Path(config['dir_name']) / 'tmp_song.ogg',
-        '-af', ','.join(af_filters),
-        '-c:a', 'libvorbis',
-        '-q:a', '10',
-        Path(config['dir_name']) / 'song.ogg'
-    ]
-    try:
-        subprocess.run(command, check=True, creationflags=_NO_WINDOW)
-        print('Synced song!')
-        return True
-    except subprocess.CalledProcessError as e:
-        print(e)
-        return False
+    output_path = Path(config['dir_name']) / 'song.ogg'
+    max_size_bytes = 13 * 1024 * 1024
+    quality_levels = [8, 7, 6, 4, 2, 0]
+
+    for quality in quality_levels:
+        command = [
+            os.path.join(BIN_DIR, "ffmpeg.exe"),
+            '-y',
+            '-i', Path(config['dir_name']) / 'tmp_song.ogg',
+            '-af', ','.join(af_filters),
+            '-c:a', 'libvorbis',
+            '-q:a', str(quality),
+            output_path
+        ]
+        try:
+            subprocess.run(command, check=True, creationflags=_NO_WINDOW)
+            size_bytes = output_path.stat().st_size if output_path.exists() else 0
+            if size_bytes <= max_size_bytes:
+                print(f'Synced song at quality {quality}.')
+                return True
+        except subprocess.CalledProcessError as e:
+            print(e)
+            return False
+
+    print('Failed to shrink song below 13 MB.')
+    return False
 
 
 def _create_info(config):
@@ -175,8 +204,8 @@ def _create_info(config):
         info['_beatsPerMinute'] = config['bpm']
         info['_environmentName'] = config['environment']
         info['_coverImageFilename'] = config.get('cover', '')
-        with open(Path(config['dir_name']) / 'Info.dat', 'w') as f:
-            json.dump(info, f, indent=4)
+        with open(Path(config['dir_name']) / 'Info.dat', 'w', encoding='utf-8') as f:
+            json.dump(info, f, indent=4, ensure_ascii=False)
         print('Created Info.dat!')
     else:
         with open(Path(TEMPLATES_DIR) / 'V4Info.template', "r", encoding="utf-8") as f:
@@ -189,8 +218,8 @@ def _create_info(config):
         info['audio']['bpm'] = config['bpm']
         info['environmentNames'] = [config['environment']]
         info['coverImageFilename'] = config.get('cover', '')
-        with open(Path(config['dir_name']) / 'Info.dat', 'w') as f:
-            json.dump(info, f, indent=4)
+        with open(Path(config['dir_name']) / 'Info.dat', 'w', encoding='utf-8') as f:
+            json.dump(info, f, indent=4, ensure_ascii=False)
         print('Created Info.dat!')
 
 
