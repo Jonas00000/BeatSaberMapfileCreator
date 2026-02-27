@@ -30,21 +30,27 @@ def _create_dir(config):
 
 
 def _load_song(config):
+    speed = config.get('song_speed', 1.0)
     if os.path.isfile(config['link']):
+        sr = sf.info(config['link']).samplerate
+        
         command = [
             os.path.join(BIN_DIR, "ffmpeg.exe"),
             '-i', config['link'],
-            '-vn',
+            '-vn'
+        ]
+        if speed != 1.0:
+            command.extend(['-af', f'asetrate={int(sr * speed)},aresample={sr}'])
+        
+        command.extend([
             '-c:a', "libvorbis",
             '-q:a', '8',
             f'{config['dir_name']}/tmp_song.ogg'
-        ]
+        ])
         try:
             subprocess.run(command, check=True, creationflags=_NO_WINDOW)
             print('Loaded song!')
-            
             extract_embedded_cover(config)
-            
             return True
         except subprocess.CalledProcessError as e:
             print(e)
@@ -53,20 +59,41 @@ def _load_song(config):
         update_command = [os.path.join(BIN_DIR, "yt-dlp.exe"), '--update']
         subprocess.run(update_command, check=False, creationflags=_NO_WINDOW)
 
+        output = f'{config['dir_name']}/download'
         command = [
             os.path.join(BIN_DIR, "yt-dlp.exe"), 
             '--extract-audio', 
             '--audio-format', 'vorbis',
             '--audio-quality', '4', 
-            '-o', f'{config['dir_name']}/tmp_song', 
+            '-o', output, 
             config['link']
         ]
         try:
             print(command)
             subprocess.run(command, check=True, creationflags=_NO_WINDOW)
-            print('Downloaded song!')
+            
+            downloaded_file = next(Path(config['dir_name']).glob('download.*'))
+            target_file = Path(config['dir_name']) / 'tmp_song.ogg'
+
+            if speed != 1.0:
+                sr = sf.info(str(downloaded_file)).samplerate
+                
+                ff_cmd = [
+                    os.path.join(BIN_DIR, "ffmpeg.exe"),
+                    '-i', str(downloaded_file),
+                    '-af', f'asetrate={int(sr * speed)},aresample={sr}',
+                    '-c:a', 'libvorbis',
+                    '-q:a', '8',
+                    str(target_file)
+                ]
+                subprocess.run(ff_cmd, check=True, creationflags=_NO_WINDOW)
+                os.remove(downloaded_file)
+            else:
+                os.rename(downloaded_file, target_file)
+
+            print('Downloaded and processed song!')
             return True
-        except subprocess.CalledProcessError as e:
+        except (subprocess.CalledProcessError, StopIteration) as e:
             print(e)
             return False
 

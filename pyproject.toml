@@ -1,6 +1,6 @@
 [project]
 name = "beatsabermapfilecreator"
-version = "1.0.0"
+version = "1.1.0"
 description = "Creates a BeatSaber Mapfile from a song link or local file"
 requires-python = ">=3.14"
 license = "GPL-2.0-or-later"
