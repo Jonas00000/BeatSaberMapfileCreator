@@ -13,8 +13,7 @@ wheels = [
 
 [[package]]
 name = "beatsabermapfilecreator"
-version = "1.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "customtkinter" },
     { name = "mutagen" },

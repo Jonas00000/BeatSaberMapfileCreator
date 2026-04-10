@@ -221,6 +221,13 @@ def _sync_song(config):
 
 
 def _create_info(config):
+    song_path = Path(config['dir_name']) / 'song.ogg'
+    song_info = sf.info(song_path)
+    sr = song_info.samplerate
+    frames = song_info.frames
+    end_sample_index = frames
+    end_beat = round((frames / sr) * (config['bpm'] / 60), 6)
+
     if config['version'] == 'V3':
         with open(Path(TEMPLATES_DIR) / 'V3Info.template', "r", encoding="utf-8") as f:
             info = json.load(f)
@@ -234,6 +241,16 @@ def _create_info(config):
         with open(Path(config['dir_name']) / 'Info.dat', 'w', encoding='utf-8') as f:
             json.dump(info, f, indent=4, ensure_ascii=False)
         print('Created Info.dat!')
+
+        with open(Path(TEMPLATES_DIR) / 'BPMInfo.template', "r", encoding="utf-8") as f:
+            bpm_info = json.load(f)
+        bpm_info['_songSampleCount'] = frames
+        bpm_info['_songFrequency'] = sr
+        bpm_info['_regions'][0]['_endSampleIndex'] = end_sample_index
+        bpm_info['_regions'][0]['_endBeat'] = end_beat
+        with open(Path(config['dir_name']) / 'BPMInfo.dat', 'w', encoding='utf-8') as f:
+            json.dump(bpm_info, f, indent=4, ensure_ascii=False)
+        print('Created BPMInfo.dat!')
     else:
         with open(Path(TEMPLATES_DIR) / 'V4Info.template', "r", encoding="utf-8") as f:
             info = json.load(f)
@@ -248,6 +265,16 @@ def _create_info(config):
         with open(Path(config['dir_name']) / 'Info.dat', 'w', encoding='utf-8') as f:
             json.dump(info, f, indent=4, ensure_ascii=False)
         print('Created Info.dat!')
+
+        with open(Path(TEMPLATES_DIR) / 'AudioData.template', "r", encoding="utf-8") as f:
+            audio_data = json.load(f)
+        audio_data['songSampleCount'] = frames
+        audio_data['songFrequency'] = sr
+        audio_data['bpmData'][0]['ei'] = end_sample_index
+        audio_data['bpmData'][0]['eb'] = end_beat
+        with open(Path(config['dir_name']) / 'AudioData.dat', 'w', encoding='utf-8') as f:
+            json.dump(audio_data, f, indent=4, ensure_ascii=False)
+        print('Created AudioData.dat!')
 
 
 def create_mapfile(config, progress=None):

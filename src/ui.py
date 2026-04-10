@@ -2,11 +2,14 @@ import json
 import os
 import threading
 import customtkinter as ctk
+import webbrowser
+import requests
 from tkinter import filedialog
 from mutagen import File as MutagenFile
 from src.paths import TEMPLATES_DIR, CONFIG_PATH
 from src.yt_music import get_ytmusic_link
 from src.create_mapfile import create_mapfile
+from src.__version__ import VERSION as APP_VERSION
 
 
 DEFAULT_CONFIG = {
@@ -21,7 +24,9 @@ DEFAULT_CONFIG = {
 }
 
 with open(os.path.join(TEMPLATES_DIR, "environments.json"), 'r', encoding='utf-8') as f:
-    ENVIRONMENTS = json.load(f)
+    _env_data = json.load(f)
+    V3_ENVS = _env_data.get("v3", [])
+    ALL_ENVS = V3_ENVS + _env_data.get("v4", [])
 
 if not os.path.isfile(CONFIG_PATH):
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
@@ -97,6 +102,42 @@ def run_ui():
 
     settings_btn = ctk.CTkButton(top_bar, text="⚙ Settings", width=100, height=28)
     settings_btn.pack(side="left")
+
+    def check_for_updates():
+        def _check():
+            try:
+                resp = requests.get("https://api.github.com/repos/Jonas00000/BeatSaberMapfileCreator/releases/latest", timeout=5)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    latest_tag = data.get("tag_name", "")
+                    latest_version = latest_tag.lstrip("v")
+                    
+                    try:
+                        latest_parts = [int(p) for p in latest_version.split("-")[0].split(".")]
+                        app_parts = [int(p) for p in APP_VERSION.split("-")[0].split(".")]
+                        is_newer = latest_parts > app_parts
+                    except ValueError:
+                        is_newer = latest_version != APP_VERSION and latest_version != ""
+                    
+                    if is_newer:
+                        def show_btn():
+                            update_btn = ctk.CTkButton(
+                                top_bar, text="Update Available", width=120, height=28,
+                                fg_color="#D32F2F", hover_color="#B71C1C",
+                                command=lambda: webbrowser.open(data.get("html_url", "https://github.com/Jonas00000/BeatSaberMapfileCreator/releases"))
+                            )
+                            update_btn.pack(side="right")
+                            notes = data.get("body", "") or "No release notes provided."
+                            if len(notes) > 300:
+                                notes = notes[:297] + "..."
+                            _Tooltip(update_btn, f"Update {latest_tag} available!\n\n" + notes)
+                        
+                        root.after(0, show_btn)
+            except Exception:
+                pass
+        threading.Thread(target=_check, daemon=True).start()
+
+    check_for_updates()
 
     # Page container
     container = ctk.CTkFrame(root, fg_color="transparent")
@@ -399,7 +440,14 @@ def run_ui():
     _e_help.pack(side="left", padx=(4, 0))
     _Tooltip(_e_help, "The environment you want to be set by default.")
 
-    env_dropdown = ctk.CTkComboBox(env_row, values=ENVIRONMENTS, state="readonly", width=220)
+    def update_env_dropdown(choice):
+        current_env = env_dropdown.get()
+        valid_envs = V3_ENVS if choice == "V3" else ALL_ENVS
+        env_dropdown.configure(values=valid_envs)
+        if current_env not in valid_envs:
+            env_dropdown.set(valid_envs[0] if valid_envs else "")
+
+    env_dropdown = ctk.CTkComboBox(env_row, values=V3_ENVS, state="readonly", width=220)
     env_dropdown.grid(row=1, column=0, sticky="ew", padx=(0, 5))
 
     v_lbl = ctk.CTkFrame(env_row, fg_color="transparent")
@@ -409,7 +457,7 @@ def run_ui():
     _v_help.pack(side="left", padx=(4, 0))
     _Tooltip(_v_help, "V3 (Legacy) or V4 (Newest). V4 added variable note jump speed but the maps are not playable on older versions of the game.")
 
-    version_dropdown = ctk.CTkComboBox(env_row, values=["V3", "V4"], state="readonly", width=75)
+    version_dropdown = ctk.CTkComboBox(env_row, values=["V3", "V4"], state="readonly", width=75, command=update_env_dropdown)
     version_dropdown.grid(row=1, column=1, padx=5)
 
     sp_lbl = ctk.CTkFrame(env_row, fg_color="transparent")
@@ -428,14 +476,20 @@ def run_ui():
             wip_path.insert(0, CONFIG["wip_path"])
         if CONFIG.get("mapper_name"):
             mapper.insert(0, CONFIG["mapper_name"])
-        env_val = CONFIG.get("environment", ENVIRONMENTS[0])
-        if env_val not in ENVIRONMENTS:
-            env_val = ENVIRONMENTS[0]
-        env_dropdown.set(env_val)
+
         ver_val = CONFIG.get("map_version", "V3")
         if ver_val not in ("V3", "V4"):
             ver_val = "V3"
         version_dropdown.set(ver_val)
+
+        valid_envs = V3_ENVS if ver_val == "V3" else ALL_ENVS
+        env_dropdown.configure(values=valid_envs)
+
+        env_val = CONFIG.get("environment", valid_envs[0] if valid_envs else "")
+        if env_val not in valid_envs:
+            env_val = valid_envs[0] if valid_envs else ""
+        env_dropdown.set(env_val)
+
         so = CONFIG.get("start_offset", 0.0)
         if so:
             start_offset_entry.insert(0, str(so))
